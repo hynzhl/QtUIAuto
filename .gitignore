@@ -1,0 +1,40 @@
+﻿# Qt binaries
+build/
+debug/
+release/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.pdb
+*.ilk
+*.lib
+
+# Qt Creator
+.qtc_clangd/
+*.pro.user*
+*.qmake.stash
+Makefile*
+
+# Generated MOC
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# IDE
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
