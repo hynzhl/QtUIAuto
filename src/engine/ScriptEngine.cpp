@@ -1,11 +1,17 @@
-﻿#include "ScriptEngine.h"
+#include "ScriptEngine.h"
 #include "PipeServer.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTimer>
 #include <QDebug>
-#include <QThread>
+
+namespace {
+// 步骤间隔。原先用 QThread::msleep(100) 同步等待，会把 GUI 线程冻住；
+// 改用定时器后事件循环仍可响应，stopPlayback() 才能真正生效。
+constexpr int kStepIntervalMs = 100;
+}
 
 ScriptEngine::ScriptEngine(PipeServer *pipeServer, QObject *parent)
     : QObject(parent)
@@ -81,63 +87,82 @@ void ScriptEngine::startPlayback()
     if (m_steps.isEmpty())
     {
         qWarning() << "[ScriptEngine] 无可回放的步骤";
-        m_state = Idle;
-        emit stateChanged(m_state);
-        emit playbackFinished(false);
+        finishPlayback(false);
         return;
     }
 
     if (!m_pipeServer || !m_pipeServer->isConnected())
     {
         qWarning() << "[ScriptEngine] Inject DLL 未连接，无法回放";
-        m_state = Idle;
-        emit stateChanged(m_state);
-        emit playbackFinished(false);
+        finishPlayback(false);
         return;
     }
 
+    m_currentStep = 0;
     m_state = Playing;
     emit stateChanged(m_state);
 
-    const int totalSteps = m_steps.size();
-    bool allSuccess = true;
+    // 投到事件循环执行，使本函数立即返回，不阻塞调用方（包括 QML 侧）
+    QTimer::singleShot(0, this, &ScriptEngine::runNextStep);
+}
 
-    for (int i = 0; i < totalSteps; ++i)
+// 逐步驱动：每执行一步就投递下一步，期间事件循环保持可响应
+void ScriptEngine::runNextStep()
+{
+    // 外部可能已调 stopPlayback() / pausePlayback() 改变状态，此时静默中止链条
+    if (m_state != Playing)
+        return;
+
+    if (!m_pipeServer || !m_pipeServer->isConnected())
     {
-        QJsonObject step = m_steps[i].toObject();
-        emit playbackStep(i + 1, totalSteps);
-
-        if (!step.contains("action"))
-        {
-            qWarning() << "[ScriptEngine] 步骤" << i << "缺少 action";
-            allSuccess = false;
-            break;
-        }
-
-        QJsonObject response = m_pipeServer->sendCommand(step);
-        const QString status = response.value("status").toString();
-        if (status != "ok")
-        {
-            qWarning() << "[ScriptEngine] 步骤" << i
-                        << "(" << step.value("action").toString() << ") 失败:"
-                        << response.value("message").toString();
-            allSuccess = false;
-            break;
-        }
-
-        QThread::msleep(100);
+        qWarning() << "[ScriptEngine] 回放中 Inject DLL 断开连接";
+        finishPlayback(false);
+        return;
     }
 
+    const int totalSteps = m_steps.size();
+    if (m_currentStep >= totalSteps)
+    {
+        finishPlayback(true);
+        return;
+    }
+
+    const int index = m_currentStep++;
+    QJsonObject step = m_steps[index].toObject();
+    emit playbackStep(index + 1, totalSteps);
+
+    if (!step.contains("action"))
+    {
+        qWarning() << "[ScriptEngine] 步骤" << index << "缺少 action";
+        finishPlayback(false);
+        return;
+    }
+
+    QJsonObject response = m_pipeServer->sendCommand(step);
+    const QString status = response.value("status").toString();
+    if (status != "ok")
+    {
+        qWarning() << "[ScriptEngine] 步骤" << index
+                    << "(" << step.value("action").toString() << ") 失败:"
+                    << response.value("message").toString();
+        finishPlayback(false);
+        return;
+    }
+
+    QTimer::singleShot(kStepIntervalMs, this, &ScriptEngine::runNextStep);
+}
+
+void ScriptEngine::finishPlayback(bool success)
+{
     m_state = Idle;
     emit stateChanged(m_state);
-    emit playbackFinished(allSuccess);
+    emit playbackFinished(success);
 }
 
 void ScriptEngine::stopPlayback()
 {
-    m_state = Idle;
-    emit stateChanged(m_state);
-    emit playbackFinished(false);
+    // 状态置 Idle 后，已投递的 runNextStep 会在首行自行退出
+    finishPlayback(false);
 }
 
 void ScriptEngine::pausePlayback()

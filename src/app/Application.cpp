@@ -4,7 +4,15 @@
 #include "engine/ControlTree.h"
 #include "engine/ScriptEngine.h"
 #include <QQmlContext>
+#include <QTimer>
 #include <QDebug>
+
+namespace {
+// 目标进程启动到注入之间的等待时长。钩子需要装到 GUI 线程上，
+// 而 targetStarted 只说明进程已拉起，此时窗口与 QML 引擎可能尚未创建，
+// 立即注入会拉不到正确的线程。E2E 侧同样采用 1500ms 等待。
+constexpr int kInjectDelayMs = 1500;
+}
 
 Application::Application(int &argc, char **argv)
     : QApplication(argc, argv)
@@ -19,12 +27,20 @@ Application::Application(int &argc, char **argv)
     m_tree    = new ControlTree(m_pipe, this);
     m_script  = new ScriptEngine(m_pipe, this);
 
-    // 连接自动注入流程：进程启动 → 启动 PipeServer → 注入 DLL
+    // 连接自动注入流程：进程启动 → 启动 PipeServer → 等窗口就绪 → 注入 DLL
     connect(m_process, &ProcessManager::targetStarted, this, [this](quint64 pid)
     {
         qInfo() << "[Application] 目标进程已启动, PID:" << pid;
         m_pipe->start(pid);
-        m_process->injectDll();
+        QTimer::singleShot(kInjectDelayMs, this, [this]()
+        {
+            if (!m_process->isRunning())
+            {
+                qWarning() << "[Application] 目标进程已退出, 取消注入";
+                return;
+            }
+            m_process->injectDll();
+        });
     });
 
     connect(m_pipe, &PipeServer::clientConnected, this, [this]()

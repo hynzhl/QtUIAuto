@@ -1,4 +1,4 @@
-﻿#ifndef SCRIPTENGINE_H
+#ifndef SCRIPTENGINE_H
 #define SCRIPTENGINE_H
 
 #include <QObject>
@@ -42,9 +42,15 @@ signals:
     void recordingSaved(const QString &path);
 
 private:
+    void runNextStep();
+    void finishPlayback(bool success);
+
     State m_state = Idle;
     QJsonArray m_steps;
     PipeServer *m_pipeServer;
+
+    // 当前待执行的步骤下标。回放由定时器逐步驱动，不能用局部变量保存进度。
+    int m_currentStep = 0;
 };
 
 #endif // SCRIPTENGINE_H

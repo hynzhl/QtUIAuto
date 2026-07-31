@@ -331,6 +331,39 @@ static void checkText(const QString &testName, const QJsonObject &resp, const QS
     }
 }
 
+// 校验 data[key] 确为非空数组。仅判 status 无法发现“对象 / 数组”结构回归，
+// 而结构不匹配在主程序侧只会表现为“列表空”，没有任何错误提示
+static void checkArrayNonEmpty(const QString &testName, const QJsonObject &resp, const QString &key)
+{
+    const QString status = resp.value("status").toString();
+    if (status != QStringLiteral("ok"))
+    {
+        g_testFail++;
+        QByteArray raw = QJsonDocument(resp).toJson(QJsonDocument::Compact);
+        e2eLog((testName + " FAIL: " + QString::fromUtf8(raw)).toUtf8().constData());
+        return;
+    }
+
+    const QJsonValue value = resp.value("data").toObject().value(key);
+    if (!value.isArray())
+    {
+        g_testFail++;
+        e2eLog((testName + " FAIL: data." + key + " 不是数组").toUtf8().constData());
+        return;
+    }
+
+    const QJsonArray arr = value.toArray();
+    if (arr.isEmpty())
+    {
+        g_testFail++;
+        e2eLog((testName + " FAIL: data." + key + " 为空数组").toUtf8().constData());
+        return;
+    }
+
+    g_testPass++;
+    e2eLog((testName + " PASS (" + key + " count=" + QString::number(arr.size()) + ")").toUtf8().constData());
+}
+
 static void runTests()
 {
     e2eLog("===== E2E Tests =====");
@@ -338,6 +371,11 @@ static void runTests()
     // 先跑 dumpTree：它产生大响应，用于验证分片组帧是否正确
     QJsonObject dumpCmd; dumpCmd["action"] = "dumptree";
     checkResult("dumpTree", sendCommand(dumpCmd, 10000));
+
+    // listcontrols 必须返回数组：主程序侧 ControlTree 按数组解析，
+    // 若退化为对象则恒得空列表而 status 仍为 ok，只能用类型断言拦住
+    QJsonObject listCmd; listCmd["action"] = "listcontrols";
+    checkArrayNonEmpty("listControls", sendCommand(listCmd, 10000), QStringLiteral("controls"));
 
     QJsonObject clickCmd; clickCmd["action"] = "click"; clickCmd["findBy"] = "objectName"; clickCmd["target"] = "btnClickMe";
     checkResult("click btnClickMe", sendCommand(clickCmd)); QThread::msleep(200);

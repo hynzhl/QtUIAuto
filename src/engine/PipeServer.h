@@ -37,6 +37,10 @@ private:
     QLocalSocket *m_client   = nullptr;
     QString m_pipeName;
     QByteArray m_readBuffer;
+
+    // 已超时命令的数量。超时返回后其响应仍会迟到，若不丢弃就会被下一条
+    // 命令的事件循环抢到，造成请求与响应错位。
+    int m_pendingDiscards = 0;
 };
 
 #endif // PIPESERVER_H

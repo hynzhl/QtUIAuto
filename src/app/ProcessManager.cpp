@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <TlHelp32.h>
 
+// 快照里的第一个线程并不保证是 GUI 线程，仅作为拿不到窗口时的回退
 static DWORD getMainThreadId(DWORD processId)
 {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
@@ -29,7 +30,40 @@ static DWORD getMainThreadId(DWORD processId)
     return mainThreadId;
 }
 
+struct WindowThreadSearch
+{
+    DWORD processId  = 0;
+    DWORD threadId   = 0;
+};
+
+static BOOL CALLBACK enumWindowProc(HWND hwnd, LPARAM lParam)
+{
+    auto *search = reinterpret_cast<WindowThreadSearch *>(lParam);
+    DWORD pid = 0;
+    const DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != search->processId || !IsWindowVisible(hwnd))
+        return TRUE;
+
+    search->threadId = tid;
+    return FALSE;   // 找到可见顶层窗口即终止枚举
+}
+
+// WH_GETMESSAGE 钩子必须装到目标的 GUI 线程上：注入侧要在主线程初始化，
+// QQuickItem 树访问与事件投递仅在那里有效。按窗口取线程比线程快照可靠。
+static DWORD getWindowThreadId(DWORD processId)
+{
+    WindowThreadSearch search;
+    search.processId = processId;
+    EnumWindows(&enumWindowProc, reinterpret_cast<LPARAM>(&search));
+    return search.threadId;
+}
+
 ProcessManager::ProcessManager(QObject *parent) : QObject(parent) {}
+
+ProcessManager::~ProcessManager()
+{
+    releaseHook();
+}
 
 bool ProcessManager::launchTarget(const QString &appPath, const QStringList &args)
 {
@@ -80,9 +114,14 @@ bool ProcessManager::injectDll()
         return false;
     }
 
-    // 2. 获取目标主线程 ID
+    // 2. 获取目标 GUI 线程 ID：优先按可见顶层窗口定位，拿不到再回退到线程快照
     const DWORD targetPid = static_cast<DWORD>(m_targetPid);
-    const DWORD targetThreadId = getMainThreadId(targetPid);
+    DWORD targetThreadId = getWindowThreadId(targetPid);
+    if (targetThreadId == 0)
+    {
+        qInfo() << "[ProcessManager] 未找到目标窗口线程, 回退到线程快照";
+        targetThreadId = getMainThreadId(targetPid);
+    }
     if (targetThreadId == 0)
     {
         emit injectionResult(false, QStringLiteral("无法获取目标主线程 ID"));
@@ -133,11 +172,29 @@ bool ProcessManager::injectDll()
 
     qInfo() << "[ProcessManager] Hook 注入已触发, 目标 PID:" << targetPid
             << "目标线程:" << targetThreadId;
-    emit injectionResult(true, QStringLiteral("Hook 注入已触发"));
 
-    // 钩子句柄和 DLL 模块在目标进程中保持有效；当前进程可以释放本地引用计数。
-    // 进程退出时由系统清理钩子。
+    // 保存句柄：钩子需要在停止目标或销毁时显式卸载，本地 DLL 引用计数也需释放。
+    // 既往实现两者都没保存，导致钩子无法卸载、DLL 永不卸载。
+    releaseHook();
+    m_hook    = hHook;
+    m_hookDll = hLocalDll;
+
+    emit injectionResult(true, QStringLiteral("Hook 注入已触发"));
     return true;
+}
+
+void ProcessManager::releaseHook()
+{
+    if (m_hook)
+    {
+        UnhookWindowsHookEx(static_cast<HHOOK>(m_hook));
+        m_hook = nullptr;
+    }
+    if (m_hookDll)
+    {
+        FreeLibrary(static_cast<HMODULE>(m_hookDll));
+        m_hookDll = nullptr;
+    }
 }
 
 // ═══════════════════════ 辅助 ═══════════════════════
@@ -176,6 +233,7 @@ QString ProcessManager::resolveDllPath() const
 
 void ProcessManager::stopTarget()
 {
+    releaseHook();
     if (m_process)
     {
         m_process->kill();

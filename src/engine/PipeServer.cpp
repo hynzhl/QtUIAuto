@@ -54,11 +54,21 @@ QJsonObject PipeServer::sendCommand(const QJsonObject &cmd, int timeoutMs)
         return makeErrorResponse(QStringLiteral("Inject DLL 未连接"));
     }
 
-    // 写入命令到 Named Pipe
-    m_client->write(QJsonDocument(cmd).toJson(QJsonDocument::Compact));
-    if (!m_client->flush())
+    // 命令必须按 NDJSON 组帧（单行 JSON + '\n'）：注入侧按 '\n' 拆包。
+    // 不带换行时仅依赖对方“整包即完整 JSON”的兼容回退，一旦两条命令粘包
+    // 就会解析失败并永久滞留在对方缓冲区，导致后续所有命令失效。
+    QByteArray data = QJsonDocument(cmd).toJson(QJsonDocument::Compact);
+    data.append('\n');
+
+    const qint64 written = m_client->write(data);
+    // flush() 内部是 waitForWrite(0)，返回 false 只表示异步写未在 0ms 内排空，
+    // 与成败无关（大负载必然如此）。成功判据只能是 write() 的返回字节数。
+    m_client->flush();
+    if (written != data.size())
     {
-        return makeErrorResponse(QStringLiteral("Pipe 写入失败"));
+        qWarning() << "[PipeServer] 命令写入不完整:" << written << "/" << data.size()
+                   << m_client->errorString();
+        return makeErrorResponse(QStringLiteral("Pipe 写入不完整"));
     }
 
     // 使用本地事件循环等待响应
@@ -81,6 +91,11 @@ QJsonObject PipeServer::sendCommand(const QJsonObject &cmd, int timeoutMs)
 
     if (response.isEmpty())
     {
+        // 本条命令的响应将在超时之后到达，预先标记为待丢弃，
+        // 否则下一条命令会把它当成自己的响应
+        ++m_pendingDiscards;
+        qWarning() << "[PipeServer] 命令超时:" << cmd.value("action").toString()
+                   << "，待丢弃响应数:" << m_pendingDiscards;
         return makeErrorResponse(QStringLiteral("命令超时"));
     }
     return response;
@@ -135,6 +150,15 @@ void PipeServer::onReadyRead()
             continue;
         }
 
+        // 已超时命令的迟到响应：必须在此丢弃，不能当作当前命令的响应向上报
+        if (m_pendingDiscards > 0)
+        {
+            --m_pendingDiscards;
+            qWarning() << "[PipeServer] 丢弃已超时命令的迟到响应:"
+                       << msg.value("action").toString();
+            continue;
+        }
+
         // 正常命令响应
         emit responseReceived(msg);
     }
@@ -144,6 +168,9 @@ void PipeServer::onClientDisconnected()
 {
     qInfo() << "[PipeServer] Inject DLL 断开连接";
     m_client = nullptr;
+    // 连接已断，迟到响应不可能再到达；不清零会让重连后的首条响应被误丢
+    m_pendingDiscards = 0;
+    m_readBuffer.clear();
     emit clientDisconnected();
 }
 
