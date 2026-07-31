@@ -4,35 +4,36 @@
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QVariantList>
 
-class AccessibilityController;
+class PipeServer;
 
 class ScriptEngine : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(State state READ state NOTIFY stateChanged)
+    Q_PROPERTY(QVariantList script READ scriptVariant NOTIFY stateChanged)
 public:
     enum State { Idle, Recording, Playing, Paused };
     Q_ENUM(State)
 
-    explicit ScriptEngine(QObject *parent = nullptr);
+    explicit ScriptEngine(PipeServer *pipeServer, QObject *parent = nullptr);
 
     State state() const { return m_state; }
 
-    // Recording
-    void startRecording();
-    void stopRecording();
-    void recordEvent(const QJsonObject &event);
+    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void stopRecording();
+    Q_INVOKABLE void recordEvent(const QJsonObject &event);
 
-    // Playback
-    bool loadScript(const QString &filePath);
-    bool loadScriptFromJson(const QJsonArray &steps);
-    void startPlayback();
-    void stopPlayback();
-    void pausePlayback();
+    Q_INVOKABLE bool loadScript(const QString &filePath);
+    Q_INVOKABLE bool loadScriptFromJson(const QVariantList &steps);
+    Q_INVOKABLE void startPlayback();
+    Q_INVOKABLE void stopPlayback();
+    Q_INVOKABLE void pausePlayback();
 
-    // Script I/O
-    bool saveScript(const QString &filePath) const;
+    Q_INVOKABLE bool saveScript(const QString &filePath) const;
     QJsonArray script() const { return m_steps; }
+    QVariantList scriptVariant() const;
 
 signals:
     void stateChanged(State state);
@@ -43,6 +44,7 @@ signals:
 private:
     State m_state = Idle;
     QJsonArray m_steps;
+    PipeServer *m_pipeServer;
 };
 
 #endif // SCRIPTENGINE_H

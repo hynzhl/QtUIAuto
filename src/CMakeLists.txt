@@ -12,12 +12,15 @@ find_package(Qt5 REQUIRED COMPONENTS Core Quick Widgets)
 # Inject DLL subdirectory
 add_subdirectory(inject)
 
+# Bridge plugin (non-invasive loading via QT_IM_MODULE)
+add_subdirectory(bridge)
+
 # Main application
 set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/Application.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/ProcessManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/engine/AccessibilityController.cpp
+
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/ControlTree.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/ScriptEngine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/PipeServer.cpp
@@ -28,6 +31,10 @@ set(QML_RESOURCES
 )
 
 add_executable(QtUIAuto ${SOURCES} ${QML_RESOURCES})
+
+if (MSVC)
+    target_compile_options(QtUIAuto PRIVATE /utf-8)
+endif()
 
 target_link_libraries(QtUIAuto PRIVATE
     Qt5::Core Qt5::Quick Qt5::Widgets

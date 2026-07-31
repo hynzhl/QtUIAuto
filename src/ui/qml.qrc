@@ -1,8 +1,8 @@
 ﻿<RCC>
     <qresource prefix="/">
-        <file>ui/qml/main.qml</file>
-        <file>ui/qml/MainWindow.qml</file>
-        <file>ui/qml/RecordPanel.qml</file>
-        <file>ui/qml/ReportView.qml</file>
+        <file>qml/main.qml</file>
+        <file>qml/MainWindow.qml</file>
+        <file>qml/RecordPanel.qml</file>
+        <file>qml/ReportView.qml</file>
     </qresource>
 </RCC>

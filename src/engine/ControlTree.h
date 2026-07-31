@@ -2,20 +2,25 @@
 #define CONTROLTREE_H
 
 #include <QObject>
-#include <QJsonArray>
-#include <QJsonObject>
+#include <QVariantList>
+#include <QVariantMap>
+
+class PipeServer;
 
 class ControlTree : public QObject
 {
     Q_OBJECT
 public:
-    explicit ControlTree(QObject *parent = nullptr);
+    explicit ControlTree(PipeServer *pipeServer, QObject *parent = nullptr);
 
-    QJsonArray getRootWindowList();
-    QJsonObject getControlTree(const QString &windowId = QString());
+    Q_INVOKABLE QVariantList getRootWindowList();
+    Q_INVOKABLE QVariantMap getControlTree(const QString &windowId = QString());
 
 signals:
     void treeChanged();
+
+private:
+    PipeServer *m_pipeServer;
 };
 
 #endif // CONTROLTREE_H

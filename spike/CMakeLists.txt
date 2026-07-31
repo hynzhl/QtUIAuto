@@ -7,9 +7,14 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 set(CMAKE_PREFIX_PATH "D:/Qt/5.15.2/msvc2019_64" ${CMAKE_PREFIX_PATH})
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 find_package(Qt5 REQUIRED COMPONENTS
     Core Quick Widgets
 )
+
+# Add private include path for Qt5::Quick (needed for QQuickAccessibleAttached)
+get_target_property(_qt5quick_pub_include Qt5::Quick INTERFACE_INCLUDE_DIRECTORIES)
+set(Qt5Quick_PRIVATE_INCLUDE "${_qt5quick_pub_include}/5.15.2")
 
 set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
@@ -20,6 +25,8 @@ set(QML_RESOURCES
 )
 
 add_executable(QtUIAuto_Spike ${SOURCES} ${QML_RESOURCES})
+
+target_include_directories(QtUIAuto_Spike PRIVATE ${Qt5Quick_PRIVATE_INCLUDE})
 
 target_link_libraries(QtUIAuto_Spike PRIVATE
     Qt5::Core Qt5::Quick Qt5::Widgets
