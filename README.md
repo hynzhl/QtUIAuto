@@ -113,16 +113,25 @@ cmake --build . --config Release --target QtUIAuto_Spike
 
 ## Testing
 
-The end-to-end suite drives a real injected target process: it launches `QtUIAuto_TestTarget`,
-injects `QtUIAuto_Inject.dll`, then exercises `dumpTree` / `click` / `doubleClick` / `typeText` /
-`getText` / `setFocus` over the pipe and asserts against the target's actual QML state.
+Two suites cover the two halves of the system.
+
+**`QtUIAuto_E2E`** — the injected side. It launches `QtUIAuto_TestTarget`,
+injects `QtUIAuto_Inject.dll`, then exercises `dumpTree` / `listControls` / `click` / `doubleClick` /
+`typeText` / `getText` / `setFocus` over the pipe and asserts against the target's actual QML state.
+
+**`QtUIAuto_HostChain`** — the host side. It links the real `ProcessManager` / `PipeServer` /
+`ScriptEngine` sources and reproduces what `Application` orchestrates: launch → listen → wait for the
+window → inject → command → playback → teardown. Beyond the happy path it pins down the behaviours
+that are easy to regress silently: request/response stay aligned across a timeout, `startPlayback()`
+returns immediately instead of blocking the caller, and `stopPlayback()` actually halts remaining steps.
 
 ```bash
 cmake .. -DBUILD_TESTS=ON
 cmake --build . --config Release --target QtUIAuto_E2E
+cmake --build . --config Release --target QtUIAuto_HostChain
 
 # Run directly (exit code 0 = all cases passed)
-cd tests/Release && ./QtUIAuto_E2E.exe
+cd tests/Release && ./QtUIAuto_E2E.exe && ./QtUIAuto_HostChain.exe
 
 # Or via CTest
 ctest -C Release
@@ -134,11 +143,14 @@ Notes:
   next to `QtUIAuto_E2E.exe`, so the suite can never run against a stale binary.
 - Cross-process injection means the suite cannot run inside a restricted sandbox, but it does
   **not** need elevation.
-- A per-run trace is written to `e2e_diag.log` next to the E2E executable (UTF-8); the injected
-  side logs to `%TEMP%\QtUIAuto_Inject.log`. Each command appears on both sides, which makes it
-  easy to tell "never dispatched" apart from "dispatched but had no effect".
+- Put the 64-bit Qt `bin` first on `PATH`. A third-party 32-bit `qt5core.dll` earlier on `PATH`
+  makes the executable die at load time with `0xC000007B` before `main()` — leaving the previous
+  run's log in place, ready to be mistaken for this run's result.
+- A per-run trace is written to `e2e_diag.log` / `host_chain_diag.log` next to the executables
+  (UTF-8); the injected side logs to `%TEMP%\QtUIAuto_Inject.log`. Each command appears on both
+  sides, which makes it easy to tell "never dispatched" apart from "dispatched but had no effect".
 
-Current status: **9/9 cases passing**.
+Current status: **E2E 10/10, HostChain 15/15**.
 
 ## Documentation
 

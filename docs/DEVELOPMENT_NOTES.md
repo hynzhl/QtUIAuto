@@ -126,6 +126,12 @@ RESP -> click    status=ok bytes=71/71     pending=0      ← 已即时排空
 
 相关代码：`src/inject/dllmain.cpp`
 
+### 同类坑会跨模块重复出现
+
+注入侧修好之后，主程序侧的 `PipeServer::sendCommand()` 仍在用 `if (!m_client->flush()) return 写入失败`，犯的是同一个错误——**修完一处务必全仓搜索同一模式**（`flush()`、`readLine()` 这类语义易误解的调用尤其如此），否则同一个坑会在另一个模块里等着。同批还发现主程序侧写命令时未追加 `\n`，与已统一的 NDJSON 组帧约定不符：注入侧虽有"整包即完整 JSON"的兼容回退，但两条命令一旦粘包就会解析失败并永久滞留在缓冲区。
+
+相关代码：`src/engine/PipeServer.cpp`
+
 ---
 
 ## 3. E2E 测试在第二条命令后静默死亡
@@ -175,3 +181,31 @@ RESP -> click    status=ok bytes=71/71     pending=0      ← 已即时排空
 - **源码含中文字面量的 target 必须加 `/utf-8`**。E2E 断言的期望值是中文，MSVC 缺省会按 GBK 解读，导致断言必然失败。已在 `tests/CMakeLists.txt` 与 `src/inject/CMakeLists.txt` 中设置。
 - **构建产物必须自动同步**。`QtUIAuto_E2E` 的 POST_BUILD 会把 `QtUIAuto_TestTarget.exe` 与 `QtUIAuto_Inject.dll` 拷到 E2E 输出目录。曾因依赖手工拷贝而跑到过期二进制，白白排查了一轮已修好的问题——排查前务必先核对二进制时间戳与源码修改时间。
 - **E2E 需要在沙箱外运行**。注入涉及写入其他进程与 `%TEMP%`，沙箱会拒绝执行。非管理员权限即可（日志中 `Running elevated: NO`）。
+- **PATH 里的第三方 32 位 Qt DLL 会冒顶**。曾出现 exe 启动即挂、退出码 `0xC000007B`（STATUS_INVALID_IMAGE_FORMAT），根因是 `C:\Program Files (x86)\MyDrivers\DriverGenius\qt5core.dll` 先被找到。运行前把 64 位 Qt 的 `bin` 前置到 PATH。此时进程根本没启动，目录里的旧日志极易被当成本次结果——先比日志时间戳，或跑前先删旧日志。
+
+---
+
+## 6. “测试通过”不等于“修复有效”
+
+验证主程序侧 `sendCommand` 超时后响应错位的修复时，用例连着过了两道坑才真正生效。
+
+### 坑一：Windows 上小超时值造不出超时
+
+用 `sendCommand(cmd, 1)` 想制造一次超时，结果命令正常返回。因为 Qt 定时器在 Windows 上基于 `SetTimer`，**最小粒度约 15ms**，给 1ms 反而要等到 ~15ms；而本地管道往返仅 1ms 左右，响应永远先到。
+
+正确做法：用 `timeoutMs = 0`。零定时器在事件循环首轮即触发，彼时目标进程还没被调度，超时是**构造性必然**而不是靠赛跑。时序类用例的前置条件必须能构造，靠碰运气就会静默失效。
+
+### 坑二：`spin()` 等待反而把 bug 抹掉了
+
+超时后先 `spin(500)` “给迟到响应留到达时间”，再发下一条命令——看着合理，实际上迟到响应在**无人监听 `responseReceived`** 时到达，被无害丢掉，错位根本不会发生。用例成了恒真。错位只发生在迟到响应**撞进下一条命令的事件循环**时，所以两条命令之间不能有任何等待。
+
+### 结论：结构性修复要做反向验证
+
+上面两道坑都是靠 **mutation check** 发现的：把修复临时停用（`if (false && m_pendingDiscards > 0)`）重新跑用例。
+
+- 停用后仍 `PASS` → 用例恒真，什么都没测到（坑二就是这么暴露的）。
+- 停用后 `FAIL: 后续命令响应 action=dumptree`、还原后 `PASS` → 用例确实能拦住回归。
+
+对看不见现象的结构性修复（响应错位、资源泄露、组帧粘包），新增用例后必须做一次反向验证，否则只能证明“当前代码不报错”，不能证明“修复有效”。
+
+相关代码：`tests/host_chain_test.cpp`、`src/engine/PipeServer.cpp`

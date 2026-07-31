@@ -31,3 +31,43 @@ add_custom_command(TARGET QtUIAuto_E2E POST_BUILD
 )
 
 add_test(NAME e2e_test COMMAND QtUIAuto_E2E)
+
+# ─────────────────────────────────────────────────────────────
+# 宿主端链路测试：直接编译进主程序的真实源文件。
+# E2E 自己实现了一套管道客户端，绕过了这三个类，所以它们需要单独覆盖。
+# ─────────────────────────────────────────────────────────────
+set(HOST_CHAIN_SOURCES
+    host_chain_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/ProcessManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/ProcessManager.h
+    ${CMAKE_SOURCE_DIR}/src/engine/PipeServer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/PipeServer.h
+    ${CMAKE_SOURCE_DIR}/src/engine/ScriptEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/ScriptEngine.h
+)
+
+add_executable(QtUIAuto_HostChain ${HOST_CHAIN_SOURCES})
+
+# 源码与日志含中文，同样必须按 UTF-8 编译
+if (MSVC)
+    target_compile_options(QtUIAuto_HostChain PRIVATE /utf-8)
+endif()
+
+target_link_libraries(QtUIAuto_HostChain PRIVATE
+    Qt5::Core Qt5::Network
+)
+
+target_include_directories(QtUIAuto_HostChain PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+add_dependencies(QtUIAuto_HostChain QtUIAuto_TestTarget QtUIAuto_Inject)
+add_custom_command(TARGET QtUIAuto_HostChain POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:QtUIAuto_TestTarget> $<TARGET_FILE_DIR:QtUIAuto_HostChain>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:QtUIAuto_Inject> $<TARGET_FILE_DIR:QtUIAuto_HostChain>
+    COMMENT "Sync QtUIAuto_TestTarget.exe / QtUIAuto_Inject.dll into HostChain output dir"
+)
+
+add_test(NAME host_chain_test COMMAND QtUIAuto_HostChain)
