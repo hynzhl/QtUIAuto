@@ -1,9 +1,9 @@
 ﻿cmake_minimum_required(VERSION 3.18)
 
 # ============================================================
-# QtUIAuto - QML UI Automation Testing Tool
+# QU - QML UI Automation Testing Tool
 # ============================================================
-project(QtUIAuto
+project(QU
     VERSION 0.1.0
     DESCRIPTION "A lightweight, non-invasive UI automation testing tool for Qt/QML applications"
     LANGUAGES CXX
@@ -28,7 +28,7 @@ endif()
 option(BUILD_TESTS "Build unit tests" OFF)
 if(BUILD_TESTS)
     enable_testing()
-    # test-target 必须先于 tests，tests 会引用 QtUIAuto_TestTarget 作为依赖
+    # test-target 必须先于 tests，tests 会引用 QU_TestTarget 作为依赖
     add_subdirectory(test-target)
     add_subdirectory(tests)
 endif()

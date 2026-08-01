@@ -1,4 +1,4 @@
-#include "QtUIAutoBridgeInputContext.h"
+#include "QUBridgeInputContext.h"
 #include "ControlScanner.h"
 #include "InputSimulator.h"
 #include "CommandHandler.h"
@@ -13,19 +13,19 @@
 
 static void bridgeLog(const char *msg)
 {
-    OutputDebugStringA("[QtUIAutoBridge] ");
+    OutputDebugStringA("[QUBridge] ");
     OutputDebugStringA(msg);
     OutputDebugStringA("\n");
-    qDebug() << "[QtUIAutoBridge]" << msg;
+    qDebug() << "[QUBridge]" << msg;
 }
 
-QtUIAutoBridgeInputContext::QtUIAutoBridgeInputContext()
+QUBridgeInputContext::QUBridgeInputContext()
 {
     // Defer actual initialization until the event loop is ready.
-    QTimer::singleShot(0, this, &QtUIAutoBridgeInputContext::initAgent);
+    QTimer::singleShot(0, this, &QUBridgeInputContext::initAgent);
 }
 
-QtUIAutoBridgeInputContext::~QtUIAutoBridgeInputContext()
+QUBridgeInputContext::~QUBridgeInputContext()
 {
     if (m_pipe)
     {
@@ -34,7 +34,7 @@ QtUIAutoBridgeInputContext::~QtUIAutoBridgeInputContext()
     }
 }
 
-void QtUIAutoBridgeInputContext::initAgent()
+void QUBridgeInputContext::initAgent()
 {
     bridgeLog("initAgent start");
 
@@ -43,21 +43,21 @@ void QtUIAutoBridgeInputContext::initAgent()
     m_handler = new CommandHandler(m_scanner, m_simulator, this);
 
     const DWORD pid = GetCurrentProcessId();
-    const QString pipeName = QStringLiteral("QtUIAuto_%1").arg(pid);
+    const QString pipeName = QStringLiteral("QU_%1").arg(pid);
     bridgeLog(qPrintable(QStringLiteral("Connecting to ") + pipeName));
 
     m_pipe = new QLocalSocket(this);
-    connect(m_pipe, &QLocalSocket::readyRead, this, &QtUIAutoBridgeInputContext::onReadyRead);
+    connect(m_pipe, &QLocalSocket::readyRead, this, &QUBridgeInputContext::onReadyRead);
     connect(m_pipe, QOverload<QLocalSocket::LocalSocketError>::of(&QLocalSocket::error),
             this, [](QLocalSocket::LocalSocketError err) {
-        qWarning() << "[QtUIAutoBridge] Pipe error:" << err;
+        qWarning() << "[QUBridge] Pipe error:" << err;
     });
-    connect(m_pipe, &QLocalSocket::disconnected, this, &QtUIAutoBridgeInputContext::onDisconnected);
+    connect(m_pipe, &QLocalSocket::disconnected, this, &QUBridgeInputContext::onDisconnected);
 
     m_pipe->connectToServer(pipeName, QIODevice::ReadWrite);
     if (!m_pipe->waitForConnected(5000))
     {
-        qWarning() << "[QtUIAutoBridge] Pipe connect failed:" << pipeName;
+        qWarning() << "[QUBridge] Pipe connect failed:" << pipeName;
         return;
     }
 
@@ -65,7 +65,7 @@ void QtUIAutoBridgeInputContext::initAgent()
     sendInjectReady();
 }
 
-void QtUIAutoBridgeInputContext::sendInjectReady()
+void QUBridgeInputContext::sendInjectReady()
 {
     if (!m_pipe)
         return;
@@ -77,7 +77,7 @@ void QtUIAutoBridgeInputContext::sendInjectReady()
     bridgeLog("inject_ready sent");
 }
 
-void QtUIAutoBridgeInputContext::onReadyRead()
+void QUBridgeInputContext::onReadyRead()
 {
     if (!m_pipe || !m_handler)
         return;
@@ -90,7 +90,7 @@ void QtUIAutoBridgeInputContext::onReadyRead()
     const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject())
     {
-        qWarning() << "[QtUIAutoBridge] JSON parse error:" << err.errorString();
+        qWarning() << "[QUBridge] JSON parse error:" << err.errorString();
         return;
     }
 
@@ -99,7 +99,7 @@ void QtUIAutoBridgeInputContext::onReadyRead()
     m_pipe->flush();
 }
 
-void QtUIAutoBridgeInputContext::onDisconnected()
+void QUBridgeInputContext::onDisconnected()
 {
     bridgeLog("Pipe disconnected");
 }

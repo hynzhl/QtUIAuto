@@ -1,4 +1,4 @@
-﻿#include <QApplication>
+#include <QApplication>
 #include <QQuickView>
 #include <QQmlEngine>
 #include <QQmlError>
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
             for (auto &e : w) qWarning().noquote() << "QML:" << e.toString(); });
 
     view.setSource(QUrl("qrc:/qml/SpikeWindow.qml"));
-    view.setTitle("QtUIAuto Spike - MouseArea Accessibility");
+    view.setTitle("QU Spike - MouseArea Accessibility");
     view.setMinimumSize(QSize(800, 600));
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.show();

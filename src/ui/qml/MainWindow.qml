@@ -1,51 +1,27 @@
-﻿import QtQuick 2.15
+import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
 
+/// ============================================================
+/// MainWindow — 主界面视图层
+///
+/// 只与 appContext 门面交互，不持有任何 C++ 引擎对象、不接触文件路径。
+/// 状态文案统一由本文件的属性驱动：一旦在 handler 里直接给 Label.text
+/// 赋值，声明式绑定会被摧毁，此后连接状态变化就再也刷不到界面上。
+/// ============================================================
 Pane {
     id: root
     padding: 16
 
-    // ── 信号连接（通过 Connections 绑定 C++ 信号）──
-    Connections {
-        target: pipeServer
-        onInjectReady: {
-            statusLabel.text = "✅ 已连接"
-            statusLabel.color = "green"
-        }
-        onClientDisconnected: {
-            statusLabel.text = "❌ 未连接"
-            statusLabel.color = "red"
-        }
-    }
+    // ── 属性 ──
 
-    Connections {
-        target: processManager
-        onInjectionResult: {
-            if (success) {
-                injectBtn.text = "✅ 已注入"
-                injectBtn.enabled = false
-            } else {
-                injectBtn.text = "❌ 注入失败: " + message
-                injectBtn.enabled = true
-            }
-        }
-    }
+    // 瞬时提示（回放进度、脚本读写结果等）。为空时状态栏回落到连接状态展示。
+    property string statusMessage: ""
 
-    Connections {
-        target: scriptEngine
-        onStateChanged: {
-            recordBtn.text = (state === ScriptEngine.Recording) ? "⏹ 停止录制" : "▶ 录制"
-            playBtn.text   = (state === ScriptEngine.Playing)  ? "⏹ 停止" : "▶ 回放"
-        }
-        onPlaybackStep: {
-            statusLabel.text = "回放中: " + step + "/" + total
-        }
-        onPlaybackFinished: {
-            statusLabel.text = success ? "✅ 回放完成" : "❌ 回放失败"
-        }
-    }
+    // 注入失败原因。为空表示尚未失败过。
+    property string injectError: ""
+
+    // ═══════════ 子组件 ═══════════
 
     ColumnLayout {
         anchors.fill: parent
@@ -54,7 +30,7 @@ Pane {
         // ── Header ──
         RowLayout {
             Label {
-                text: "QtUIAuto"
+                text: "QU"
                 font.pixelSize: 24
                 font.bold: true
             }
@@ -65,12 +41,16 @@ Pane {
             Item { Layout.fillWidth: true }
             Rectangle {
                 width: 12; height: 12; radius: 6
-                color: pipeServer.connected ? "green" : "red"
+                color: appContext.connected ? "green" : "red"
             }
             Label {
                 id: statusLabel
-                text: pipeServer.connected ? "✅ 已连接" : "❌ 未连接"
-                color: pipeServer.connected ? "green" : "red"
+                text: root.statusMessage.length > 0
+                      ? root.statusMessage
+                      : (appContext.connected ? "✅ 已连接" : "❌ 未连接")
+                color: root.statusMessage.length > 0
+                       ? "#333"
+                       : (appContext.connected ? "green" : "red")
             }
         }
 
@@ -88,18 +68,22 @@ Pane {
                 highlighted: true
                 onClicked: {
                     if (targetPath.text.length > 0) {
-                        processManager.launchTarget(targetPath.text)
+                        root.injectError = ""
+                        appContext.launchTarget(targetPath.text)
                     }
                 }
             }
             Button {
                 id: injectBtn
-                text: "💉 注入 DLL"
-                onClicked: processManager.injectDll()
+                text: root.injectError.length > 0
+                      ? "❌ 注入失败: " + root.injectError
+                      : (appContext.connected ? "✅ 已注入" : "💉 注入 DLL")
+                enabled: !appContext.connected
+                onClicked: appContext.injectDll()
             }
             Button {
                 text: "⏹ 停止"
-                onClicked: processManager.stopTarget()
+                onClicked: appContext.stopTarget()
             }
         }
 
@@ -108,47 +92,25 @@ Pane {
             spacing: 8
             Button {
                 id: recordBtn
-                text: "▶ 录制"
-                onClicked: {
-                    if (scriptEngine.state === ScriptEngine.Recording)
-                        scriptEngine.stopRecording()
-                    else
-                        scriptEngine.startRecording()
-                }
+                text: appContext.recording ? "⏹ 停止录制" : "▶ 录制"
+                onClicked: appContext.toggleRecording()
             }
             Button {
                 id: playBtn
-                text: "▶ 回放"
-                onClicked: {
-                    if (scriptEngine.state === ScriptEngine.Playing)
-                        scriptEngine.stopPlayback()
-                    else
-                        scriptEngine.startPlayback()
-                }
+                text: appContext.playing ? "⏹ 停止" : "▶ 回放"
+                onClicked: appContext.togglePlayback()
             }
             Button {
                 text: "📂 打开脚本"
-                onClicked: {
-                    scriptEngine.loadScript("C:/test_script.json")
-                    statusLabel.text = "脚本已加载"
-                }
+                onClicked: appContext.loadScript()
             }
             Button {
                 text: "💾 保存脚本"
-                onClicked: {
-                    scriptEngine.saveScript("C:/recorded_script.json")
-                    statusLabel.text = "脚本已保存"
-                }
+                onClicked: appContext.saveScript()
             }
             Button {
                 text: "🔄 刷新控件树"
-                onClicked: {
-                    treeModel.model.clear()
-                    var windows = controlTree.getRootWindowList()
-                    for (var i = 0; i < windows.length; i++) {
-                        treeModel.model.append(windows[i])
-                    }
-                }
+                onClicked: root.refreshTree()
             }
             Item { Layout.fillWidth: true }
         }
@@ -170,10 +132,10 @@ Pane {
             // ── Tab 0: 控件树 ──
             ColumnLayout {
                 ListView {
-                    id: treeModel
+                    id: treeView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: ListModel {}
+                    model: ListModel { id: treeModel }
                     clip: true
                     delegate: ItemDelegate {
                         text: "[" + model.objectName + "] " + model.typeName
@@ -197,13 +159,7 @@ Pane {
                 }
                 Button {
                     text: "🔄 刷新脚本列表"
-                    onClicked: {
-                        scriptModel.clear()
-                        var steps = scriptEngine.script
-                        for (var i = 0; i < steps.length; i++) {
-                            scriptModel.append(steps[i])
-                        }
-                    }
+                    onClicked: root.refreshScript()
                 }
             }
 
@@ -211,5 +167,57 @@ Pane {
             ReportView {}
         }
     }
-}
 
+    // ═══════════ 信号 / Connections ═══════════
+
+    Connections {
+        target: appContext
+
+        // Qt 5.15 起隐式 onFoo 属性已弃用，一律用具名函数形式声明处理器。
+        function onInjectionResult(success, message) {
+            root.injectError = success ? "" : message;
+        }
+
+        function onPlaybackStep(step, total) {
+            root.statusMessage = "回放中: " + step + "/" + total;
+        }
+
+        function onPlaybackFinished(success) {
+            root.statusMessage = success ? "✅ 回放完成" : "❌ 回放失败";
+        }
+
+        function onScriptSaved(success, path) {
+            root.statusMessage = success ? "✅ 脚本已保存: " + path
+                                        : "❌ 脚本保存失败: " + path;
+        }
+
+        function onScriptLoaded(success, path) {
+            if (success) {
+                root.statusMessage = "✅ 脚本已加载: " + path;
+                root.refreshScript();
+            } else {
+                root.statusMessage = "❌ 脚本加载失败: " + path;
+            }
+        }
+    }
+
+    // ═══════════ 函数 ═══════════
+
+    /// 重新拉取根窗口列表并填充控件树视图
+    function refreshTree() {
+        treeModel.clear();
+        var windows = appContext.rootWindowList();
+        for (var i = 0; i < windows.length; i++) {
+            treeModel.append(windows[i]);
+        }
+    }
+
+    /// 用门面里的当前脚本刷新脚本列表视图
+    function refreshScript() {
+        scriptModel.clear();
+        var steps = appContext.script;
+        for (var i = 0; i < steps.length; i++) {
+            scriptModel.append(steps[i]);
+        }
+    }
+}

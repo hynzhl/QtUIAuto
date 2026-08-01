@@ -38,7 +38,10 @@ static const char *logPath()
 static void hcLog(const QString &msg)
 {
     FILE *f = fopen(logPath(), "a");
-    if (!f) return;
+    if (!f)
+    {
+        return;
+    }
     SYSTEMTIME st;
     GetLocalTime(&st);
     fprintf(f, "[%02u:%02u:%02u.%03u] %s\n", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
@@ -65,8 +68,14 @@ static void bad(const QString &name, const QString &reason)
 // 而日志里又看不到 FAIL。每个用例都必须把前置条件构造出来，造不出来就计 FAIL。
 static void check(const QString &name, bool condition, const QString &detail)
 {
-    if (condition) ok(name, detail);
-    else bad(name, detail);
+    if (condition)
+    {
+        ok(name, detail);
+    }
+    else
+    {
+        bad(name, detail);
+    }
 }
 
 // ═══════════════════════ 辅助 ═══════════════════════
@@ -75,9 +84,15 @@ static QString findFile(const QString &name)
 {
     const QString dir = QCoreApplication::applicationDirPath();
     QString path = dir + QStringLiteral("/") + name;
-    if (QFileInfo::exists(path)) return QFileInfo(path).absoluteFilePath();
+    if (QFileInfo::exists(path))
+    {
+        return QFileInfo(path).absoluteFilePath();
+    }
     path = dir + QStringLiteral("/../") + name;
-    if (QFileInfo::exists(path)) return QFileInfo(path).absoluteFilePath();
+    if (QFileInfo::exists(path))
+    {
+        return QFileInfo(path).absoluteFilePath();
+    }
     return QString();
 }
 
@@ -262,7 +277,9 @@ static void testPlaybackStoppable(ScriptEngine *script)
 {
     QVariantList steps;
     for (int i = 0; i < 8; ++i)
+    {
         steps << step(QStringLiteral("click"), QStringLiteral("btnClickMe")).toVariantMap();
+    }
     script->loadScriptFromJson(steps);
 
     int lastStep = 0;
@@ -299,16 +316,16 @@ int main(int argc, char *argv[])
     remove(logPath());
     hcLog(QStringLiteral("===== Host Chain Test ====="));
 
-    const QString targetPath = findFile(QStringLiteral("QtUIAuto_TestTarget.exe"));
+    const QString targetPath = findFile(QStringLiteral("QU_TestTarget.exe"));
     if (targetPath.isEmpty())
     {
-        hcLog(QStringLiteral("FATAL: 找不到 QtUIAuto_TestTarget.exe"));
+        hcLog(QStringLiteral("FATAL: 找不到 QU_TestTarget.exe"));
         return 1;
     }
-    const QString dllPath = findFile(QStringLiteral("QtUIAuto_Inject.dll"));
+    const QString dllPath = findFile(QStringLiteral("QU_Inject.dll"));
     if (dllPath.isEmpty())
     {
-        hcLog(QStringLiteral("FATAL: 找不到 QtUIAuto_Inject.dll"));
+        hcLog(QStringLiteral("FATAL: 找不到 QU_Inject.dll"));
         return 1;
     }
     hcLog(QStringLiteral("Target: ") + targetPath);
@@ -341,7 +358,7 @@ int main(int argc, char *argv[])
         hcLog(QStringLiteral("Done. Pass: %1 Fail: %2").arg(g_pass).arg(g_fail));
         return 1;
     }
-    ok(QStringLiteral("pipeServer/start"), QStringLiteral("监听 QtUIAuto_%1").arg(process.targetPid()));
+    ok(QStringLiteral("pipeServer/start"), QStringLiteral("监听 QU_%1").arg(process.targetPid()));
 
     // 与 Application 中 kInjectDelayMs 一致：窗口与 QML 引擎需要时间创建
     spin(1500);

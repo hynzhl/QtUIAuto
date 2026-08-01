@@ -179,7 +179,7 @@ RESP -> click    status=ok bytes=71/71     pending=0      ← 已即时排空
 ## 5. 构建与运行环境约束
 
 - **源码含中文字面量的 target 必须加 `/utf-8`**。E2E 断言的期望值是中文，MSVC 缺省会按 GBK 解读，导致断言必然失败。已在 `tests/CMakeLists.txt` 与 `src/inject/CMakeLists.txt` 中设置。
-- **构建产物必须自动同步**。`QtUIAuto_E2E` 的 POST_BUILD 会把 `QtUIAuto_TestTarget.exe` 与 `QtUIAuto_Inject.dll` 拷到 E2E 输出目录。曾因依赖手工拷贝而跑到过期二进制，白白排查了一轮已修好的问题——排查前务必先核对二进制时间戳与源码修改时间。
+- **构建产物必须自动同步**。`QU_E2E` 的 POST_BUILD 会把 `QU_TestTarget.exe` 与 `QU_Inject.dll` 拷到 E2E 输出目录。曾因依赖手工拷贝而跑到过期二进制，白白排查了一轮已修好的问题——排查前务必先核对二进制时间戳与源码修改时间。
 - **E2E 需要在沙箱外运行**。注入涉及写入其他进程与 `%TEMP%`，沙箱会拒绝执行。非管理员权限即可（日志中 `Running elevated: NO`）。
 - **PATH 里的第三方 32 位 Qt DLL 会冒顶**。曾出现 exe 启动即挂、退出码 `0xC000007B`（STATUS_INVALID_IMAGE_FORMAT），根因是 `C:\Program Files (x86)\MyDrivers\DriverGenius\qt5core.dll` 先被找到。运行前把 64 位 Qt 的 `bin` 前置到 PATH。此时进程根本没启动，目录里的旧日志极易被当成本次结果——先比日志时间戳，或跑前先删旧日志。
 

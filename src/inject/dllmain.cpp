@@ -25,7 +25,7 @@ static void winLog(const char *msg)
     OutputDebugStringA("\n");
     char path[MAX_PATH];
     GetTempPathA(MAX_PATH, path);
-    strcat_s(path, "QtUIAuto_Inject.log");
+    strcat_s(path, "QU_Inject.log");
     HANDLE hFile = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL,
         OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) return;
@@ -138,7 +138,7 @@ static void connectPipe()
 
     DWORD pid = GetCurrentProcessId();
     char pipeName[64];
-    sprintf_s(pipeName, "QtUIAuto_%lu", pid);
+    sprintf_s(pipeName, "QU_%lu", pid);
     winLog(pipeName);
     QString qPipeName = QString::fromLatin1(pipeName);
 

@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
+#include <memory>
 #include <windows.h>
 #include <TlHelp32.h>
 
@@ -35,6 +36,50 @@ struct WindowThreadSearch
     DWORD processId  = 0;
     DWORD threadId   = 0;
 };
+
+/// RAII wrapper for WH_GETMESSAGE hook handle and the locally loaded DLL module.
+/// Destroying it uninstalls the hook and releases the library reference count.
+struct ProcessManager::HookHandle
+{
+    HHOOK hook = nullptr;
+    HMODULE module = nullptr;
+
+    HookHandle() = default;
+    HookHandle(HHOOK h, HMODULE m)
+        : hook(h)
+        , module(m)
+    {
+    }
+
+    ~HookHandle()
+    {
+        release();
+    }
+
+    HookHandle(const HookHandle &) = delete;
+    HookHandle &operator=(const HookHandle &) = delete;
+    HookHandle(HookHandle &&) = default;
+    HookHandle &operator=(HookHandle &&) = default;
+
+    void release()
+    {
+        if (hook)
+        {
+            UnhookWindowsHookEx(hook);
+            hook = nullptr;
+        }
+        if (module)
+        {
+            FreeLibrary(module);
+            module = nullptr;
+        }
+    }
+};
+
+void ProcessManager::HookHandleDeleter::operator()(HookHandle *ptr) const
+{
+    delete ptr;
+}
 
 static BOOL CALLBACK enumWindowProc(HWND hwnd, LPARAM lParam)
 {
@@ -110,7 +155,7 @@ bool ProcessManager::injectDll()
     QString dllPath = resolveDllPath();
     if (dllPath.isEmpty())
     {
-        emit injectionResult(false, QStringLiteral("找不到 QtUIAuto_Inject.dll"));
+        emit injectionResult(false, QStringLiteral("找不到 QU_Inject.dll"));
         return false;
     }
 
@@ -176,8 +221,7 @@ bool ProcessManager::injectDll()
     // 保存句柄：钩子需要在停止目标或销毁时显式卸载，本地 DLL 引用计数也需释放。
     // 既往实现两者都没保存，导致钩子无法卸载、DLL 永不卸载。
     releaseHook();
-    m_hook    = hHook;
-    m_hookDll = hLocalDll;
+    m_hookHandle = std::unique_ptr<HookHandle, HookHandleDeleter>(new HookHandle(hHook, hLocalDll));
 
     emit injectionResult(true, QStringLiteral("Hook 注入已触发"));
     return true;
@@ -185,16 +229,7 @@ bool ProcessManager::injectDll()
 
 void ProcessManager::releaseHook()
 {
-    if (m_hook)
-    {
-        UnhookWindowsHookEx(static_cast<HHOOK>(m_hook));
-        m_hook = nullptr;
-    }
-    if (m_hookDll)
-    {
-        FreeLibrary(static_cast<HMODULE>(m_hookDll));
-        m_hookDll = nullptr;
-    }
+    m_hookHandle.reset();
 }
 
 // ═══════════════════════ 辅助 ═══════════════════════
@@ -213,14 +248,14 @@ QString ProcessManager::resolveDllPath() const
 
     // 默认查找同目录
     QString exeDir = QCoreApplication::applicationDirPath();
-    QString dllPath = exeDir + QStringLiteral("/QtUIAuto_Inject.dll");
+    QString dllPath = exeDir + QStringLiteral("/QU_Inject.dll");
     if (QFileInfo::exists(dllPath))
     {
         return QFileInfo(dllPath).absoluteFilePath();
     }
 
     // 回退：查找 inject 构建目录（开发阶段）
-    dllPath = exeDir + QStringLiteral("/../inject/Release/QtUIAuto_Inject.dll");
+    dllPath = exeDir + QStringLiteral("/../inject/Release/QU_Inject.dll");
     if (QFileInfo::exists(dllPath))
     {
         QString absPath = QFileInfo(dllPath).absoluteFilePath();

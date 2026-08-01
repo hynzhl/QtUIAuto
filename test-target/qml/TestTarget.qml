@@ -7,7 +7,7 @@ Window {
     visible: true
     width: 640
     height: 520
-    title: "QtUIAuto Test Target"
+    title: "QU Test Target"
     objectName: "testTargetWindow"
 
     property int clickCount: 0
@@ -15,7 +15,7 @@ Window {
     Label {
         id: titleLabel
         objectName: "titleLabel"
-        text: "QtUIAuto 测试目标应用"
+        text: "QU 测试目标应用"
         font.pixelSize: 20
         font.bold: true
         anchors.top: parent.top

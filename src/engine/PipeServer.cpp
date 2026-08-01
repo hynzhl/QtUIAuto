@@ -11,7 +11,7 @@ PipeServer::PipeServer(QObject *parent)
 
 bool PipeServer::start(quint64 targetPid)
 {
-    m_pipeName = QStringLiteral("QtUIAuto_%1").arg(targetPid);
+    m_pipeName = QStringLiteral("QU_%1").arg(targetPid);
     m_server = new QLocalServer(this);
 
     QLocalServer::removeServer(m_pipeName);

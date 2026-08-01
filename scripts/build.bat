@@ -1,9 +1,9 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 :: ============================================================
-:: QtUIAuto — 一键构建脚本
+:: QU — 一键构建脚本
 :: ============================================================
 
 set "PROJECT_DIR=%~dp0.."
@@ -48,7 +48,7 @@ set "BUILD_DIR=%PROJECT_DIR%\build"
 
 :: 配置 CMake
 echo ============================================================
-echo  Configuring QtUIAuto (Release)...
+echo  Configuring QU (Release)...
 echo ============================================================
 cmake -S "%PROJECT_DIR%" -B "%BUILD_DIR%" ^
     -DCMAKE_BUILD_TYPE=Release ^
@@ -61,7 +61,7 @@ if %ERRORLEVEL% NEQ 0 (
 :: 编译
 echo.
 echo ============================================================
-echo  Building QtUIAuto...
+echo  Building QU...
 echo ============================================================
 cmake --build "%BUILD_DIR%" --config Release
 if %ERRORLEVEL% NEQ 0 (
@@ -72,9 +72,9 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo ============================================================
 echo  Build complete!
-echo  - Main app: %BUILD_DIR%\src\Release\QtUIAuto.exe
-echo  - Inject DLL: %BUILD_DIR%\inject\Release\QtUIAuto_Inject.dll
-echo  - Spike: %BUILD_DIR%\spike\Release\QtUIAuto_Spike.exe
+echo  - Main app: %BUILD_DIR%\src\Release\QU.exe
+echo  - Inject DLL: %BUILD_DIR%\inject\Release\QU_Inject.dll
+echo  - Spike: %BUILD_DIR%\spike\Release\QU_Spike.exe
 echo ============================================================
 endlocal
 pause

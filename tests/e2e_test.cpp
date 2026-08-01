@@ -190,7 +190,7 @@ static DWORD getMainThreadId(DWORD processId)
 
 static DWORD getWindowThreadId(DWORD processId)
 {
-    HWND hwnd = FindWindowW(nullptr, L"QtUIAuto Test Target");
+    HWND hwnd = FindWindowW(nullptr, L"QU Test Target");
     if (!hwnd) return 0;
     DWORD pid = 0;
     DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
@@ -426,11 +426,11 @@ int main(int argc, char *argv[])
     if (hSelf2) { logProcessIntegrity(hSelf2, "Self"); CloseHandle(hSelf2); }
     e2eLog("SeDebugPrivilege enabled");
 
-    QString targetPath = findFile("QtUIAuto_TestTarget.exe");
+    QString targetPath = findFile("QU_TestTarget.exe");
     if (targetPath.isEmpty()) { e2eLog("FAIL: cannot find TestTarget.exe"); return 1; }
     e2eLog(QString("Target: " + targetPath).toUtf8().constData());
 
-    QString dllPath = findFile("QtUIAuto_Inject.dll");
+    QString dllPath = findFile("QU_Inject.dll");
     if (dllPath.isEmpty()) { e2eLog("FAIL: cannot find Inject.dll"); return 1; }
     e2eLog(QString("DLL: " + dllPath).toUtf8().constData());
 
@@ -442,7 +442,7 @@ int main(int argc, char *argv[])
     e2eLog(QString("Target PID: " + QString::number(targetPid)).toUtf8().constData());
     QThread::msleep(1500);
 
-    g_pipeName = QStringLiteral("QtUIAuto_%1").arg(targetPid);
+    g_pipeName = QStringLiteral("QU_%1").arg(targetPid);
     QLocalServer::removeServer(g_pipeName);
     g_server = new QLocalServer(&app);
     QObject::connect(g_server, &QLocalServer::newConnection, []() {

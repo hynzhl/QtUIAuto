@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "app/AppContext.h"
 #include "app/ProcessManager.h"
 #include "engine/PipeServer.h"
 #include "engine/ControlTree.h"
@@ -17,7 +18,7 @@ constexpr int kInjectDelayMs = 1500;
 Application::Application(int &argc, char **argv)
     : QApplication(argc, argv)
 {
-    setApplicationName("QtUIAuto");
+    setApplicationName("QU");
     setApplicationVersion("0.1.0");
     setOrganizationName("hynzhl");
 
@@ -26,6 +27,9 @@ Application::Application(int &argc, char **argv)
     m_pipe    = new PipeServer(this);
     m_tree    = new ControlTree(m_pipe, this);
     m_script  = new ScriptEngine(m_pipe, this);
+
+    // 业务门面：聚合上述引擎，对 QML 只暴露它一个
+    m_context = new AppContext(m_process, m_pipe, m_tree, m_script, this);
 
     // 连接自动注入流程：进程启动 → 启动 PipeServer → 等窗口就绪 → 注入 DLL
     connect(m_process, &ProcessManager::targetStarted, this, [this](quint64 pid)
@@ -66,9 +70,8 @@ Application::~Application()
 
 void Application::setupQmlContext()
 {
+    // 只暴露门面（规范 §8）。若把四个引擎平铺给 QML，界面就会直接
+    // 持有底层对象，甚至为了读枚举而不得不认识 C++ 类型名。
     QQmlContext *ctx = m_engine->rootContext();
-    ctx->setContextProperty(QStringLiteral("processManager"), m_process);
-    ctx->setContextProperty(QStringLiteral("pipeServer"), m_pipe);
-    ctx->setContextProperty(QStringLiteral("controlTree"), m_tree);
-    ctx->setContextProperty(QStringLiteral("scriptEngine"), m_script);
+    ctx->setContextProperty(QStringLiteral("appContext"), m_context);
 }

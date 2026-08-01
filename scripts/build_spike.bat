@@ -18,7 +18,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Building Spike...
-cmake --build %BUILD_DIR% --config Release --target QtUIAuto_Spike
+cmake --build %BUILD_DIR% --config Release --target QU_Spike
 if errorlevel 1 (
     echo [ERROR] Build failed
     pause

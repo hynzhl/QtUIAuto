@@ -1,5 +1,5 @@
 ﻿cmake_minimum_required(VERSION 3.18)
-project(QtUIAuto_Spike LANGUAGES CXX)
+project(QU_Spike LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,10 +24,10 @@ set(QML_RESOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/qml.qrc
 )
 
-add_executable(QtUIAuto_Spike ${SOURCES} ${QML_RESOURCES})
+add_executable(QU_Spike ${SOURCES} ${QML_RESOURCES})
 
-target_include_directories(QtUIAuto_Spike PRIVATE ${Qt5Quick_PRIVATE_INCLUDE})
+target_include_directories(QU_Spike PRIVATE ${Qt5Quick_PRIVATE_INCLUDE})
 
-target_link_libraries(QtUIAuto_Spike PRIVATE
+target_link_libraries(QU_Spike PRIVATE
     Qt5::Core Qt5::Quick Qt5::Widgets
 )

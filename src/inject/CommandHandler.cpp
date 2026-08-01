@@ -19,6 +19,13 @@ QJsonObject CommandHandler::handleCommand(const QJsonObject &cmd)
     const QString action = cmd.value("action").toString().toLower();
     qDebug() << "[CommandHandler] 收到命令:" << action;
 
+    // 按规范 §7：QPointer 调用前先判空，避免 agent 子组件提前析构导致崩溃。
+    if (!m_scanner || !m_simulator)
+    {
+        qWarning() << "[CommandHandler] scanner 或 simulator 未就绪";
+        return makeError(action, QStringLiteral("agent 组件未初始化"));
+    }
+
     // ─── 交互命令（bool 返回型）───
     if (action == "click")
         return execTargetAction(cmd, action,
